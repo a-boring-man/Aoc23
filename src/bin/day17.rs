@@ -277,7 +277,7 @@ impl Path {
 
 
 fn main() {
-    let heat_map = HeatMap::new_from_input("input\\day17.txt");
+    let heat_map = HeatMap::new_from_input("input/day17.txt"); // the path to the input
     println!("heat map: {heat_map:?}");
     let mut factory = Factory::new(&heat_map);
     println!("factory: {factory:?}");

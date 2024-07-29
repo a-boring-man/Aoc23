@@ -5,15 +5,15 @@ edition = "2021"
 
 [lib]
 name = "aoc_lib"
-path = "src\\lib.rs"
+path = "src/lib.rs"
 
 [[bin]]
 name = "day01"
-path = "src\\bin\\day01.rs"
+path = "src/bin/day01.rs"
 
 [[bin]]
 name = "day17"
-path = "src\\bin\\day17.rs"
+path = "src/bin/day17.rs"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
