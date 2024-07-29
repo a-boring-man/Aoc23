@@ -6,19 +6,19 @@ struct Coordinate2D {
     pub vertical: usize,
 }
 
-#[derive(Debug)]
-struct HeatMap {
-    map: Vec<Vec<u8>>,
-    horizontal_length: usize,
-    vertical_length: usize,
-}
-
 #[derive(PartialEq, Eq, Clone, Debug, Copy)]
 enum Direction {
     Up,
     Down,
     Left,
     Right,
+}
+
+#[derive(Debug)]
+struct HeatMap {
+    map: Vec<Vec<u8>>,
+    horizontal_length: usize,
+    vertical_length: usize,
 }
 
 #[derive(Debug, Clone)]
@@ -36,6 +36,38 @@ struct Factory {
     map: Vec<Vec<Vec<Path>>>,
     horizontal_length: usize,
     vertical_length: usize,
+}
+
+impl HeatMap {
+    fn new_from_input(path: &str) -> Self {
+        let map: Vec<Vec<u8>> = read_lines_string(path)
+            .unwrap()
+            .into_iter()
+            .map(|line| line.bytes().map(|b| b - b'0').collect())
+            .collect();
+        Self {
+            horizontal_length: map.len(),
+            vertical_length: map[0].len(),
+            map,
+        }
+    }
+
+    fn get_hotness(&self, horizontal_coordinate: usize, vertical_coordinate: usize) -> Option<u8> {
+        if horizontal_coordinate > self.horizontal_length
+        || vertical_coordinate > self.vertical_length
+        {
+            return None;
+        }
+        Some(self.map[vertical_coordinate][horizontal_coordinate])
+    }
+}
+
+fn create_slice(heat_map: &HeatMap) -> Vec<Vec<Path>> {
+    let mut slice = Vec::new();
+    for i in 0..heat_map.vertical_length {
+        slice.push(Vec::with_capacity(12))
+    };
+    slice
 }
 
 impl Factory {
@@ -64,14 +96,14 @@ impl Factory {
     }
 
     fn try_to_insert_path(&mut self, path: &Path) {
-        let present_path = &mut self.map[path.coordinate.vertical][path.coordinate.horizontal];
-        match present_path.iter_mut().find(|old_path| Path::can_they_go_to_the_same_place(&old_path, path)) {
-            Some(same_path) => {
+        let present_path = &mut self.map[path.coordinate.vertical][path.coordinate.horizontal]; // get the list of path that have been to this cell
+        match present_path.iter_mut().find(|old_path| Path::can_they_go_to_the_same_place(&old_path, path)) { // check if there is a path that can go to the same place
+            Some(same_path) => { // if yes then keep the smallest
                 if same_path.sum > path.sum {
                     *same_path = path.to_owned();
                 }
             },
-            None => {
+            None => { // else add it to the cell
                 present_path.push(path.to_owned());
             },
         }
@@ -86,15 +118,15 @@ impl Factory {
     }
 
     fn propagate_every_path(&mut self, heat_map: &HeatMap) {
-        let new_paths_to_difuse: Vec<Path> = self.map.iter_mut().flat_map(|line| {
-            line.iter_mut().flat_map(|cell| {
-                if cell.len() > 12 {
-                    // println!("HAAAA");
+        let new_paths_to_difuse: Vec<Path> = self.map.iter_mut().flat_map(|line| { // for each line in the grid
+            line.iter_mut().flat_map(|cell| { // for each cell in a line
+                if cell.len() > 12 { // just to see if i was right on my only 12 type of path prediction
+                    // println!("HAAAA"); // turn out i was wrong/ made a mistake in can_they_go_to_the_same_place function
                 }
-                cell.iter_mut()
-                    .filter(|path| !path.has_been_diffused)
+                cell.iter_mut() // for each path in a cell
+                    .filter(|path| !path.has_been_diffused) // find all path that have not been diffused
                     .flat_map(|path| {
-                        let salut = path.generate_all_new_coordinate(
+                        let salut = path.generate_all_new_coordinate( // generate the new path based on the one found
                             self.horizontal_length - 1,
                             self.vertical_length - 1,
                             heat_map,
@@ -103,23 +135,19 @@ impl Factory {
                         salut
                     })
                 })
-        }).collect();
+        }).collect(); // a big vec of all the new paths that need to be inserted into the factory
         // println!("new_path to difuse: {:?}", new_paths_to_difuse);
         new_paths_to_difuse
-            .iter()
-            .for_each(|new_path| self.try_to_insert_path(new_path));
+            .iter() // for each path
+            .for_each(|new_path| self.try_to_insert_path(new_path)); // insert/replace worst path in the factory
     }
 }
 
-fn create_slice(heat_map: &HeatMap) -> Vec<Vec<Path>> {
-    let mut slice = Vec::new();
-    for i in 0..heat_map.vertical_length {
-        slice.push(Vec::with_capacity(12))
-    };
-    slice
-}
 
 impl Path {
+    /// if two path can go to the exact same place then we just need to keep the one with the smallest sum
+    /// this function can be greatly optimized, to reduce the number of potential different path to 12
+    /// but i lake the brain power to do so now...
     fn can_they_go_to_the_same_place(first_path: &Path, second_path: &Path) -> bool {
         // println!("at leat they do the check");
         first_path.last_direction == second_path.last_direction
@@ -132,6 +160,7 @@ impl Path {
         )
     }
 
+    /// generate all the possible path based on the current coordinate and last direction
     fn generate_all_new_coordinate(
         &mut self,
         max_horizontal: usize,
@@ -140,13 +169,13 @@ impl Path {
     ) -> Vec<Path> {
         let mut new_paths = Vec::new();
         let right = self.coordinate.horizontal + 1;
-        if right <= max_horizontal
-            && (self.last_last_last_direction.is_none()
+        if right <= max_horizontal // the position exist
+            && (self.last_last_last_direction.is_none() // one of the last direction is non AKA this path as not yet walked 3 cell
                 || self.last_last_direction.is_none()
                 || self.last_direction.is_none()
-                || !(self.last_direction == Some(Direction::Right)
+                || !(self.last_direction == Some(Direction::Right) // he didn't just go right right right
                     && self.last_last_direction == Some(Direction::Right)
-                    && self.last_last_last_direction == Some(Direction::Right))) && self.last_direction != Some(Direction::Left)
+                    && self.last_last_last_direction == Some(Direction::Right))) && self.last_direction != Some(Direction::Left) // no 180 degree turn
         {
             let new_coordinate = Coordinate2D {
                 horizontal: right,
@@ -246,29 +275,6 @@ impl Path {
     }
 }
 
-impl HeatMap {
-    fn new_from_input(path: &str) -> Self {
-        let map: Vec<Vec<u8>> = read_lines_string(path)
-            .unwrap()
-            .into_iter()
-            .map(|line| line.bytes().map(|b| b - b'0').collect())
-            .collect();
-        Self {
-            horizontal_length: map.len(),
-            vertical_length: map[0].len(),
-            map,
-        }
-    }
-
-    fn get_hotness(&self, horizontal_coordinate: usize, vertical_coordinate: usize) -> Option<u8> {
-        if horizontal_coordinate > self.horizontal_length
-            || vertical_coordinate > self.vertical_length
-        {
-            return None;
-        }
-        Some(self.map[vertical_coordinate][horizontal_coordinate])
-    }
-}
 
 fn main() {
     let heat_map = HeatMap::new_from_input("input\\day17.txt");
