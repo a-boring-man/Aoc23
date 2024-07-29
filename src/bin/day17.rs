@@ -291,9 +291,10 @@ fn main() {
         }
     }
     let end_vec = factory.map[factory.vertical_length - 1][factory.horizontal_length - 1].clone();
-    end_vec.sort_by(|a b| a.sum b.sum);
+    let best_path = end_vec.iter().min_by(|path1, path2| path1.sum.partial_cmp(&path2.sum).unwrap());
     println!(
         "end vec: {:?}",
         factory.map[factory.vertical_length - 1][factory.horizontal_length - 1]
     );
+    println!("the best path was: {:?}", best_path.unwrap());
 }
