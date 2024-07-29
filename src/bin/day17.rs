@@ -1,4 +1,7 @@
 use aoc_lib::{read_lines_byte, read_lines_string};
+const FILEPATH: &str = "input/day17.txt";
+const OUTPUTFILE: &str = "output/day17.txt";
+use std::{fs::File, io::{BufWriter, Write}};
 
 #[derive(Debug, Clone, Copy)]
 struct Coordinate2D {
@@ -29,6 +32,7 @@ struct Path {
     pub last_last_last_direction: Option<Direction>,
     pub sum: u32,
     pub has_been_diffused: bool,
+    pub history: Vec<Coordinate2D>,
 }
 
 #[derive(Debug, Clone)]
@@ -54,7 +58,7 @@ impl HeatMap {
 
     fn get_hotness(&self, horizontal_coordinate: usize, vertical_coordinate: usize) -> Option<u8> {
         if horizontal_coordinate > self.horizontal_length
-        || vertical_coordinate > self.vertical_length
+            || vertical_coordinate > self.vertical_length
         {
             return None;
         }
@@ -66,12 +70,16 @@ fn create_slice(heat_map: &HeatMap) -> Vec<Vec<Path>> {
     let mut slice = Vec::new();
     for i in 0..heat_map.vertical_length {
         slice.push(Vec::with_capacity(12))
-    };
+    }
     slice
 }
 
 impl Factory {
     fn new(heat_map: &HeatMap) -> Self {
+        let history = vec![Coordinate2D {
+            horizontal: 0,
+            vertical: 0,
+        }];
         let first_path = Path {
             coordinate: Coordinate2D {
                 horizontal: 0,
@@ -82,6 +90,7 @@ impl Factory {
             last_last_last_direction: None,
             sum: 0,
             has_been_diffused: false,
+            history,
         };
         let mut map = Vec::new();
         for _i in 0..heat_map.horizontal_length {
@@ -95,17 +104,25 @@ impl Factory {
         }
     }
 
-    fn try_to_insert_path(&mut self, path: &Path) {
+    fn try_to_insert_path(&mut self, path: &mut Path) {
         let present_path = &mut self.map[path.coordinate.vertical][path.coordinate.horizontal]; // get the list of path that have been to this cell
-        match present_path.iter_mut().find(|old_path| Path::can_they_go_to_the_same_place(&old_path, path)) { // check if there is a path that can go to the same place
-            Some(same_path) => { // if yes then keep the smallest
+        match present_path
+            .iter_mut()
+            .find(|old_path| Path::can_they_go_to_the_same_place(&old_path, path))
+        {
+            // check if there is a path that can go to the same place
+            Some(same_path) => {
+                // if yes then keep the smallest
                 if same_path.sum > path.sum {
+                    path.history.push(path.coordinate);
                     *same_path = path.to_owned();
                 }
-            },
-            None => { // else add it to the cell
+            }
+            None => {
+                // else add it to the cell
+                path.history.push(path.coordinate);
                 present_path.push(path.to_owned());
-            },
+            }
         }
     }
 
@@ -118,31 +135,37 @@ impl Factory {
     }
 
     fn propagate_every_path(&mut self, heat_map: &HeatMap) {
-        let new_paths_to_difuse: Vec<Path> = self.map.iter_mut().flat_map(|line| { // for each line in the grid
-            line.iter_mut().flat_map(|cell| { // for each cell in a line
-                if cell.len() > 12 { // just to see if i was right on my only 12 type of path prediction
-                    // println!("HAAAA"); // turn out i was wrong/ made a mistake in can_they_go_to_the_same_place function
-                }
-                cell.iter_mut() // for each path in a cell
-                    .filter(|path| !path.has_been_diffused) // find all path that have not been diffused
-                    .flat_map(|path| {
-                        let salut = path.generate_all_new_coordinate( // generate the new path based on the one found
-                            self.horizontal_length - 1,
-                            self.vertical_length - 1,
-                            heat_map,
-                        );
-                        // println!("new_path: {:?}", salut);
-                        salut
-                    })
+        let mut new_paths_to_difuse: Vec<Path> = self
+            .map
+            .iter_mut()
+            .flat_map(|line| {
+                // for each line in the grid
+                line.iter_mut().flat_map(|cell| {
+                    // for each cell in a line
+                    if cell.len() > 12 { // just to see if i was right on my only 12 type of path prediction
+                         // println!("HAAAA"); // turn out i was wrong/ made a mistake in can_they_go_to_the_same_place function
+                    }
+                    cell.iter_mut() // for each path in a cell
+                        .filter(|path| !path.has_been_diffused) // find all path that have not been diffused
+                        .flat_map(|path| {
+                            let salut = path.generate_all_new_coordinate(
+                                // generate the new path based on the one found
+                                self.horizontal_length - 1,
+                                self.vertical_length - 1,
+                                heat_map,
+                            );
+                            // println!("new_path: {:?}", salut);
+                            salut
+                        })
                 })
-        }).collect(); // a big vec of all the new paths that need to be inserted into the factory
-        // println!("new_path to difuse: {:?}", new_paths_to_difuse);
+            })
+            .collect(); // a big vec of all the new paths that need to be inserted into the factory
+                        // println!("new_path to difuse: {:?}", new_paths_to_difuse);
         new_paths_to_difuse
-            .iter() // for each path
+            .iter_mut() // for each path
             .for_each(|new_path| self.try_to_insert_path(new_path)); // insert/replace worst path in the factory
     }
 }
-
 
 impl Path {
     /// if two path can go to the exact same place then we just need to keep the one with the smallest sum
@@ -152,12 +175,44 @@ impl Path {
         // println!("at leat they do the check");
         first_path.last_direction == second_path.last_direction
             && ((first_path.last_last_direction != first_path.last_direction
-            && second_path.last_last_direction != second_path.last_direction) ||
-                (first_path.last_last_direction == second_path.last_last_direction && (
-                    first_path.last_last_last_direction != first_path.last_last_direction &&
-                    second_path.last_last_last_direction != second_path.last_last_direction
-                )) || (first_path.last_last_last_direction == second_path.last_last_last_direction && first_path.last_last_direction == second_path.last_last_direction)
-        )
+                && second_path.last_last_direction != second_path.last_direction)
+                || (first_path.last_last_direction == second_path.last_last_direction
+                    && (first_path.last_last_last_direction != first_path.last_last_direction
+                        && second_path.last_last_last_direction
+                            != second_path.last_last_direction))
+                || (first_path.last_last_last_direction == second_path.last_last_last_direction
+                    && first_path.last_last_direction == second_path.last_last_direction))
+    }
+
+    fn generate_history(&self) {
+        let content = read_lines_string(FILEPATH).unwrap();
+        let mut map: Vec<Vec<char>> = content.iter().map(|line| line.chars().collect()).collect();
+
+        for i in 0..self.history.len() {
+            let current = self.history[i];
+            let symbol = if i > 0 {
+                let previous = self.history[i - 1];
+                if current.horizontal > previous.horizontal {
+                    '>'
+                } else if current.horizontal < previous.horizontal {
+                    '<'
+                } else if current.vertical > previous.vertical {
+                    'V'
+                } else {
+                    '^'
+                }
+            } else {
+                'S'
+            };
+
+            map[current.vertical][current.horizontal] = symbol;
+        }
+
+        let output = File::create(OUTPUTFILE).unwrap();
+        let mut writer = BufWriter::new(output);
+        for row in map {
+            writeln!(writer, "{}", row.iter().collect::<String>()).unwrap();
+        }
     }
 
     /// generate all the possible path based on the current coordinate and last direction
@@ -170,12 +225,13 @@ impl Path {
         let mut new_paths = Vec::new();
         let right = self.coordinate.horizontal + 1;
         if right <= max_horizontal // the position exist
-            && (self.last_last_last_direction.is_none() // one of the last direction is non AKA this path as not yet walked 3 cell
-                || self.last_last_direction.is_none()
-                || self.last_direction.is_none()
+        && (self.last_last_last_direction.is_none() // one of the last direction is non AKA this path as not yet walked 3 cell
+        || self.last_last_direction.is_none()
+        || self.last_direction.is_none()
                 || !(self.last_direction == Some(Direction::Right) // he didn't just go right right right
-                    && self.last_last_direction == Some(Direction::Right)
-                    && self.last_last_last_direction == Some(Direction::Right))) && self.last_direction != Some(Direction::Left) // no 180 degree turn
+                && self.last_last_direction == Some(Direction::Right)
+                    && self.last_last_last_direction == Some(Direction::Right))) && self.last_direction != Some(Direction::Left)
+        // no 180 degree turn
         {
             let new_coordinate = Coordinate2D {
                 horizontal: right,
@@ -198,7 +254,8 @@ impl Path {
                 || self.last_direction.is_none()
                 || !(self.last_direction == Some(Direction::Down)
                     && self.last_last_direction == Some(Direction::Down)
-                    && self.last_last_last_direction == Some(Direction::Down))) && self.last_direction != Some(Direction::Up)
+                    && self.last_last_last_direction == Some(Direction::Down)))
+            && self.last_direction != Some(Direction::Up)
         {
             let new_coordinate = Coordinate2D {
                 horizontal: self.coordinate.horizontal,
@@ -222,7 +279,8 @@ impl Path {
                     || self.last_direction.is_none()
                     || !(self.last_direction == Some(Direction::Left)
                         && self.last_last_direction == Some(Direction::Left)
-                        && self.last_last_last_direction == Some(Direction::Left)) && self.last_direction != Some(Direction::Right)
+                        && self.last_last_last_direction == Some(Direction::Left))
+                        && self.last_direction != Some(Direction::Right)
                 {
                     let new_coordinate = Coordinate2D {
                         horizontal: left,
@@ -250,7 +308,8 @@ impl Path {
                     || self.last_direction.is_none()
                     || !(self.last_direction == Some(Direction::Up)
                         && self.last_last_direction == Some(Direction::Up)
-                        && self.last_last_last_direction == Some(Direction::Up)) && self.last_direction != Some(Direction::Down)
+                        && self.last_last_last_direction == Some(Direction::Up))
+                        && self.last_direction != Some(Direction::Down)
                 {
                     let new_coordinate = Coordinate2D {
                         horizontal: self.coordinate.horizontal,
@@ -275,7 +334,6 @@ impl Path {
     }
 }
 
-
 fn main() {
     let heat_map = HeatMap::new_from_input("input/day17.txt"); // the path to the input
     println!("heat map: {heat_map:?}");
@@ -291,10 +349,13 @@ fn main() {
         }
     }
     let end_vec = factory.map[factory.vertical_length - 1][factory.horizontal_length - 1].clone();
-    let best_path = end_vec.iter().min_by(|path1, path2| path1.sum.partial_cmp(&path2.sum).unwrap());
+    let best_path = end_vec
+        .iter()
+        .min_by(|path1, path2| path1.sum.partial_cmp(&path2.sum).unwrap());
     println!(
         "end vec: {:?}",
         factory.map[factory.vertical_length - 1][factory.horizontal_length - 1]
     );
+    best_path.unwrap().generate_history();
     println!("the best path was: {:?}", best_path.unwrap());
 }
