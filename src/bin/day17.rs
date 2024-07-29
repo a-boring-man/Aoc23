@@ -296,5 +296,5 @@ fn main() {
         "end vec: {:?}",
         factory.map[factory.vertical_length - 1][factory.horizontal_length - 1]
     );
-    println!("the best path was: {:?}", best_path.unwrap());
+    println!("the best path sum was: {:?}", best_path.unwrap().sum);
 }
